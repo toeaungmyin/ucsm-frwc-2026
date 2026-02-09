@@ -61,9 +61,13 @@ export const getByCategoryId = async (
 				name: true,
 				image: true,
 			},
-			orderBy: {
-				nomineeId: "asc",
-			},
+		});
+
+		// Sort numerically by nomineeId (convert to number for proper numerical ordering)
+		candidates.sort((a, b) => {
+			const numA = parseInt(a.nomineeId, 10) || 0;
+			const numB = parseInt(b.nomineeId, 10) || 0;
+			return numA - numB;
 		});
 
 		// Add presigned URLs

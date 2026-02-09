@@ -12,3 +12,22 @@ export const toggleVotingSchema = z.object({
 	enabled: z.boolean(),
 });
 
+export const initiateUploadSchema = z.object({
+	fileName: z.string().min(1),
+	fileSize: z.number().positive(),
+	contentType: z.string().min(1),
+});
+
+export const uploadChunkSchema = z.object({
+	sessionId: z.string().uuid(),
+	chunkIndex: z.number().int().nonnegative(),
+});
+
+export const finalizeUploadSchema = z.object({
+	sessionId: z.string().uuid(),
+});
+
+export const cancelUploadSchema = z.object({
+	sessionId: z.string().uuid(),
+});
+

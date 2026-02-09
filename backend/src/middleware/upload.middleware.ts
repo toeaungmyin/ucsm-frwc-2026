@@ -70,3 +70,11 @@ export const uploadVideo = multer({
 	},
 });
 
+// Chunk upload (max 10MB per chunk - for chunked uploads)
+export const uploadChunk = multer({
+	storage,
+	limits: {
+		fileSize: 10 * 1024 * 1024, // 10MB per chunk
+	},
+});
+

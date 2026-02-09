@@ -44,9 +44,9 @@ app.use((_req, res, next) => {
 });
 
 // Rate limiting - Different limits for different routes
-// Admin routes: 100 requests per 15 minutes
+// Admin routes: 100 requests per 0.5 minutes
 const adminRateLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000,
+	windowMs: 0.5 * 60 * 1000,
 	max: 100,
 	message: { success: false, message: "Too many requests, please try again later" },
 	standardHeaders: true,

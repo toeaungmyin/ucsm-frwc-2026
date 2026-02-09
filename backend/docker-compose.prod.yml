@@ -15,23 +15,28 @@ services:
       - minio
 
   # PostgreSQL Database
-  db:
-    image: postgres:16-alpine
-    container_name: ucsm-frwc-db
-    restart: unless-stopped
-    env_file:
-      - .env
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - ucsm-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ucsm_frwc"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # db:
+  #   image: postgres:16-alpine
+  #   container_name: ucsm-frwc-db
+  #   restart: unless-stopped
+  #   environment:
+  #     # Explicit PostgreSQL environment variables (required for initialization)
+  #     POSTGRES_USER: ${POSTGRES_USER:-postgres}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  #     POSTGRES_DB: ${POSTGRES_DB:-ucsm_frwc}
+  #     # Prevent database from being reset on restart
+  #     PGDATA: /var/lib/postgresql/data/pgdata
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - ucsm-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d ucsm_frwc"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
   # Backend API
   backend:
@@ -51,8 +56,8 @@ services:
     networks:
       - ucsm-network
     depends_on:
-      db:
-        condition: service_healthy
+      # db:
+      #   condition: service_healthy
       minio:
         condition: service_healthy
 
@@ -84,5 +89,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
+  # postgres_data:
   minio_data:

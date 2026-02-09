@@ -226,6 +226,18 @@ export const copyFile = async (sourceObject: string, destObject: string): Promis
 	await minioClient.copyObject(BUCKET_NAME, destObject, `/${BUCKET_NAME}/${sourceObject}`);
 };
 
+/**
+ * Upload file from buffer (used for assembling chunks)
+ */
+export const uploadFileFromBuffer = async (
+	fileName: string,
+	fileBuffer: Buffer,
+	contentType: string,
+	folder?: string
+): Promise<string> => {
+	return await uploadFile(fileName, fileBuffer, contentType, folder);
+};
+
 // Export the MinIO client for advanced usage
 export { minioClient, BUCKET_NAME };
 
