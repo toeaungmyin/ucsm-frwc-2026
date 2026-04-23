@@ -270,31 +270,15 @@ docker-compose logs -f
 
 #### Environment Variables for Docker
 
-Create a `.env` file in the project root:
+Create `backend/.env` (for example with `cp backend/.env.example backend/.env`). PostgreSQL is **not** run by Docker: set `DATABASE_URL` to a database you run separately (e.g. Postgres on the host: use `host.docker.internal:5432` in the URL from inside containers). The compose file also sets `APP_URL`, `FRONTEND_URL`, and `MINIO_*` overrides as needed for local routing.
 
-```env
-# Database
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=ucsm_frwc
-
-# Backend
-NODE_ENV=production
-JWT_SECRET=your-super-secret-jwt-key-change-in-production
-JWT_EXPIRES_IN=7d
-FRONTEND_URL=http://localhost:3000
-
-# Frontend
-VITE_API_URL=http://localhost:8000/api
-```
-
-#### Service URLs
+#### Service URLs (full stack on port 80)
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8000 |
-| Database | localhost:5432 |
+| App (UI + API via proxy) | http://localhost:8026 |
+| MinIO console | http://localhost:9001 |
+| Database | External — whatever you set in `DATABASE_URL` |
 
 #### Docker Commands
 
@@ -311,10 +295,7 @@ docker-compose up -d --build
 # View logs
 docker-compose logs -f [service-name]
 
-# Access database
-docker exec -it ucsm-frwc-db psql -U postgres -d ucsm_frwc
-
-# Run database migrations
+# Run database migrations (Prisma; requires DATABASE_URL in backend/.env to be reachable)
 docker exec -it ucsm-frwc-backend npx prisma migrate deploy
 ```
 
@@ -324,7 +305,8 @@ docker exec -it ucsm-frwc-backend npx prisma migrate deploy
 
 ### Base URL
 ```
-http://localhost:8000/api
+# Local dev (Vite) or direct backend: http://localhost:8000/api
+# Full Docker stack: http://localhost:8026/api
 ```
 
 ### Authentication

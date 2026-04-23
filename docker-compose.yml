@@ -1,0 +1,90 @@
+# Local stack: nginx, frontend, backend, minio. Postgres is NOT in Docker — set
+# DATABASE_URL in backend/.env to your external database (e.g. Postgres on the
+# host: use host.docker.internal:5432 on Mac/Win/Linux with Docker 20.10+).
+#
+#   cp backend/.env.example backend/.env   # then set DATABASE_URL, secrets
+#   docker compose up -d --build
+#
+# App: http://localhost:8026  (MinIO console on host :9001)
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: ucsm-frwc-nginx
+    restart: unless-stopped
+    ports:
+      - "8026:80"
+    volumes:
+      - ./docker/nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - ucsm-network
+    depends_on:
+      - frontend
+      - backend
+      - minio
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ucsm-frwc-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      APP_URL: http://localhost:8026
+      FRONTEND_URL: http://localhost:8026
+      MINIO_PUBLIC_URL: http://localhost:8026/storage
+    # Reach PostgreSQL (or other services) on the host machine
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "8000"
+    networks:
+      - ucsm-network
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: ucsm-frwc-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - ucsm-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: ucsm-frwc-minio
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      - minio_data:/data
+    expose:
+      - "9000"
+    ports:
+      - "9001:9001"
+    networks:
+      - ucsm-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ucsm-network:
+    driver: bridge
+
+volumes:
+  minio_data:

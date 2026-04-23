@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ============================================
-# Backend Deployment Script
-# Compresses and uploads codebase via SCP
+# Full-stack deployment (frontend + backend + docker)
+# Zips the repo, uploads via SCP, runs docker compose on the server
 # ============================================
 
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
@@ -10,7 +10,7 @@ set -euo pipefail  # Exit on error, undefined vars, pipe failures
 # Configuration - Modify these variables
 TARGET_IP="${TARGET_IP:-your-server-ip}"
 TARGET_USER="${TARGET_USER:-root}"
-TARGET_PATH="${TARGET_PATH:-/var/www/backend}"
+TARGET_PATH="${TARGET_PATH:-/var/www/ucsm-frwc}"
 SSH_KEY="${SSH_KEY:-}"  # Optional: path to SSH key
 SSH_PORT="${SSH_PORT:-22}"
 BACKUP_RETENTION="${BACKUP_RETENTION:-3}"  # Keep last N backups
@@ -24,11 +24,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Script variables
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Script lives at repository root (docker-compose, backend/, frontend/)
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-ZIP_NAME="backend_${TIMESTAMP}.zip"
-TEMP_DIR="/tmp/backend_deploy_${TIMESTAMP}"
+ZIP_NAME="ucsm_frwc_${TIMESTAMP}.zip"
+TEMP_DIR="/tmp/ucsm_frwc_deploy_${TIMESTAMP}"
 BACKUP_NAME="backup_${TIMESTAMP}"
 
 # Cleanup function (called on exit)
@@ -117,7 +117,7 @@ usage() {
     echo "Options:"
     echo "  -i, --ip        Target server IP address"
     echo "  -u, --user      SSH username (default: root)"
-    echo "  -p, --path      Target deployment path (default: /var/www/backend)"
+    echo "  -p, --path      Target deployment path (default: /var/www/ucsm-frwc)"
     echo "  -k, --key       Path to SSH private key"
     echo "  -P, --port      SSH port (default: 22)"
     echo "  -r, --retention Number of backups to keep (default: 3)"
@@ -134,7 +134,7 @@ usage() {
     echo "  SKIP_DOCKER_CLEANUP Skip aggressive Docker cleanup"
     echo ""
     echo "Example:"
-    echo "  $0 -i 192.168.1.100 -u deploy -p /opt/backend -r 5"
+    echo "  $0 -i 192.168.1.100 -u deploy -p /opt/ucsm-frwc -r 5"
     echo "  TARGET_IP=192.168.1.100 BACKUP_RETENTION=5 $0"
 }
 
@@ -197,15 +197,14 @@ validate_config() {
         exit 1
     fi
     
-    # Validate .env.production exists
-    if [ ! -f "${SCRIPT_DIR}/.env.production" ]; then
-        log_error ".env.production file not found in ${SCRIPT_DIR}"
+    if [ ! -f "${PROJECT_ROOT}/backend/.env.production" ]; then
+        log_error "backend/.env.production not found in ${PROJECT_ROOT}/backend"
         exit 1
     fi
-    
-    # Validate docker-compose.prod.yml exists
-    if [ ! -f "${SCRIPT_DIR}/docker-compose.prod.yml" ]; then
-        log_error "docker-compose.prod.yml file not found in ${SCRIPT_DIR}"
+
+    # Validate root compose (full stack: nginx, frontend, backend, minio)
+    if [ ! -f "${PROJECT_ROOT}/docker-compose.prod.yml" ]; then
+        log_error "docker-compose.prod.yml not found in ${PROJECT_ROOT}"
         exit 1
     fi
 }
@@ -223,9 +222,9 @@ build_ssh_opts() {
 
 # Create zip archive
 create_archive() {
-    log_info "Creating deployment archive..."
+    log_info "Creating deployment archive (monorepo: backend + frontend + docker)..."
     
-    cd "$SCRIPT_DIR"
+    cd "$PROJECT_ROOT"
     
     # Create temp directory
     mkdir -p "$TEMP_DIR"
@@ -238,24 +237,29 @@ create_archive() {
         zip_output="/dev/null"
     fi
     
-    # Create zip excluding unnecessary files
+    # Create zip excluding unnecessary files (match root .gitignore-style paths)
     if ! zip -r "$TEMP_DIR/$ZIP_NAME" . \
-        -x "node_modules/*" \
-        -x "dist/*" \
-        -x ".git/*" \
-        -x ".env" \
-        -x ".env.local" \
-        -x ".env.development" \
-        -x ".env.development.local" \
-        -x ".env.test" \
-        -x ".env.test.local" \
+        -x "*/.git/*" \
+        -x "*/node_modules/*" \
+        -x "*/dist/*" \
+        -x "*/build/*" \
+        -x "*/.next/*" \
+        -x "*/out/*" \
+        -x "*/coverage/*" \
+        -x "*/.nyc_output/*" \
+        -x "*/tmp/*" \
+        -x "*/.cursor/*" \
+        -x "backend/.env" \
+        -x "backend/.env.local" \
+        -x "backend/.env.*.local" \
+        -x "frontend/.env" \
+        -x "frontend/.env.local" \
+        -x "frontend/.env.*.local" \
         -x "*.log" \
         -x ".DS_Store" \
         -x "*.zip" \
-        -x "coverage/*" \
-        -x ".nyc_output/*" \
-        -x "tmp/*" \
-        -x ".cursor/*" \
+        -x "./.env" \
+        -x "./.env.*.local" \
         > "$zip_output" 2>&1; then
         log_error "Failed to create archive"
         exit 1
@@ -333,11 +337,11 @@ fi
 
 cd current
 
-# Copy environment files
-if [ -f ".env.production" ]; then
-    cp .env.production .env
+# Copy environment files (compose uses backend/.env)
+if [ -f "backend/.env.production" ]; then
+    cp backend/.env.production backend/.env
 else
-    echo "Warning: .env.production not found" >&2
+    echo "Warning: backend/.env.production not found" >&2
 fi
 
 if [ -f "docker-compose.prod.yml" ]; then
@@ -422,7 +426,7 @@ REMOTE_SCRIPT
 main() {
     echo ""
     echo "============================================"
-    echo "       Backend Deployment Script"
+    echo "   UCSM FRWC — full stack deploy (Docker)"
     echo "============================================"
     echo ""
     
@@ -462,7 +466,7 @@ main() {
     log_success "  Deployment completed successfully!"
     log_success "============================================"
     echo ""
-    log_info "Your backend is now deployed to:"
+    log_info "Your application is now deployed to:"
     echo "  ${TARGET_USER}@${TARGET_IP}:${TARGET_PATH}/current"
     echo ""
     log_info "To rollback, run on server:"

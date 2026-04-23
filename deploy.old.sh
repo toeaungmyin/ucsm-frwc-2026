@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # ============================================
-# Backend Deployment Script
-# Compresses and uploads codebase via SCP
+# Legacy full-stack deploy (simpler flow; kept for reference)
 # ============================================
 
 set -e  # Exit on any error
@@ -10,7 +9,7 @@ set -e  # Exit on any error
 # Configuration - Modify these variables
 TARGET_IP="${TARGET_IP:-your-server-ip}"
 TARGET_USER="${TARGET_USER:-root}"
-TARGET_PATH="${TARGET_PATH:-/var/www/backend}"
+TARGET_PATH="${TARGET_PATH:-/var/www/ucsm-frwc}"
 SSH_KEY="${SSH_KEY:-}"  # Optional: path to SSH key
 SSH_PORT="${SSH_PORT:-22}"
 
@@ -21,11 +20,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Script variables
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-ZIP_NAME="backend_${TIMESTAMP}.zip"
-TEMP_DIR="/tmp/backend_deploy_${TIMESTAMP}"
+ZIP_NAME="ucsm_frwc_${TIMESTAMP}.zip"
+TEMP_DIR="/tmp/ucsm_frwc_deploy_${TIMESTAMP}"
 
 # Print colored message
 log_info() {
@@ -51,7 +49,7 @@ usage() {
     echo "Options:"
     echo "  -i, --ip        Target server IP address"
     echo "  -u, --user      SSH username (default: root)"
-    echo "  -p, --path      Target deployment path (default: /var/www/backend)"
+    echo "  -p, --path      Target deployment path (default: /var/www/ucsm-frwc)"
     echo "  -k, --key       Path to SSH private key"
     echo "  -P, --port      SSH port (default: 22)"
     echo "  -h, --help      Show this help message"
@@ -64,7 +62,7 @@ usage() {
     echo "  SSH_PORT        SSH port"
     echo ""
     echo "Example:"
-    echo "  $0 -i 192.168.1.100 -u deploy -p /opt/backend"
+    echo "  $0 -i 192.168.1.100 -u deploy -p /opt/ucsm-frwc"
     echo "  TARGET_IP=192.168.1.100 $0"
 }
 
@@ -118,6 +116,11 @@ validate_config() {
         log_error "SSH key file not found: $SSH_KEY"
         exit 1
     fi
+
+    if [ ! -f "${PROJECT_ROOT}/docker-compose.prod.yml" ]; then
+        log_error "docker-compose.prod.yml not found in ${PROJECT_ROOT}"
+        exit 1
+    fi
 }
 
 # Build SSH/SCP options
@@ -133,33 +136,38 @@ build_ssh_opts() {
 
 # Create zip archive
 create_archive() {
-    log_info "Creating deployment archive..."
+    log_info "Creating deployment archive (frontend + backend + docker)…"
     
-    cd "$SCRIPT_DIR"
+    cd "$PROJECT_ROOT"
     
-    # Create temp directory
     mkdir -p "$TEMP_DIR"
     
-    # Create zip excluding unnecessary files
-    zip -r "$TEMP_DIR/$ZIP_NAME" . \
-        -x "node_modules/*" \
-        -x "dist/*" \
-        -x ".git/*" \
-        -x ".env" \
-        -x ".env.local" \
-        -x ".env.development" \
-        -x ".env.development.local" \
-        -x ".env.test" \
-        -x ".env.test.local" \
-        -x ".env.local" \
+    if ! zip -r "$TEMP_DIR/$ZIP_NAME" . \
+        -x "*/.git/*" \
+        -x "*/node_modules/*" \
+        -x "*/dist/*" \
+        -x "*/build/*" \
+        -x "*/.next/*" \
+        -x "*/out/*" \
+        -x "*/coverage/*" \
+        -x "*/.nyc_output/*" \
+        -x "*/tmp/*" \
+        -x "*/.cursor/*" \
+        -x "backend/.env" \
+        -x "backend/.env.local" \
+        -x "backend/.env.*.local" \
+        -x "frontend/.env" \
+        -x "frontend/.env.local" \
+        -x "frontend/.env.*.local" \
         -x "*.log" \
         -x ".DS_Store" \
         -x "*.zip" \
-        -x "coverage/*" \
-        -x ".nyc_output/*" \
-        -x "tmp/*" \
-        -x ".cursor/*" \
-        > /dev/null 2>&1
+        -x "./.env" \
+        -x "./.env.*.local" \
+        > /dev/null 2>&1; then
+        log_error "Failed to create archive"
+        exit 1
+    fi
     
     ZIP_SIZE=$(du -h "$TEMP_DIR/$ZIP_NAME" | cut -f1)
     log_success "Archive created: $ZIP_NAME ($ZIP_SIZE)"
@@ -202,9 +210,11 @@ remote_setup() {
         
         cd current
 
-		cp .env.production .env
-		
-		cp docker-compose.prod.yml docker-compose.yml
+        if [ -f "backend/.env.production" ]; then
+            cp backend/.env.production backend/.env
+        fi
+
+        cp docker-compose.prod.yml docker-compose.yml
         
         # Stop existing containers
         if [ -f "docker-compose.yml" ]; then
@@ -212,10 +222,10 @@ remote_setup() {
             sudo docker compose down 2>/dev/null || true
         fi
         
-        # Clean up Docker to free disk space
+        # Clean up Docker (images/build cache; does not remove named volumes)
         echo "Cleaning up Docker resources..."
-        sudo docker system prune -af --volumes 2>/dev/null || true
-        sudo docker builder prune -af 2>/dev/null || true
+        sudo docker system prune -f 2>/dev/null || true
+        sudo docker builder prune -f 2>/dev/null || true
         
         # Build and start Docker containers
         echo "Building and starting Docker containers..."
@@ -251,7 +261,7 @@ cleanup() {
 main() {
     echo ""
     echo "============================================"
-    echo "       Backend Deployment Script"
+    echo "  UCSM FRWC — legacy full-stack deploy"
     echo "============================================"
     echo ""
     
@@ -286,7 +296,7 @@ main() {
     log_success "  Deployment completed successfully!"
     log_success "============================================"
     echo ""
-    log_info "Your backend is now deployed to:"
+    log_info "Your application is now deployed to:"
     echo "  ${TARGET_USER}@${TARGET_IP}:${TARGET_PATH}/current"
     echo ""
 }
